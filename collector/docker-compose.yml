@@ -18,7 +18,7 @@ services:
       # которую однажды опубликуют. Совпадение портов оставляет доступ
       # ровно к этой.
       - -c
-      - port=5433
+      - port=5440
       - -c
       - ssl=on
       - -c
@@ -33,7 +33,7 @@ services:
       # по умолчанию идут на 5432. База слушает 5433, поэтому порт задаётся
       # переменной — иначе бэкап молча падал бы каждую ночь, а заметили бы
       # это только по алерту о протухшем дампе.
-      PGPORT: 5433
+      PGPORT: 5440
     volumes:
       # В образах postgres 18 монтируется сам каталог, а не data внутри него:
       # данные тогда лежат в подкаталоге, и обновление версии через
@@ -44,9 +44,9 @@ services:
     # мониторинга. Кого пускать, решает правило ufw в роли telemetry_collector;
     # обход ufw контейнерами на этом хосте закрыт отдельно.
     ports:
-      - "${COLLECTOR_PG_PORT:-5433}:5433"
+      - "${COLLECTOR_PG_PORT:-5440}:5440"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -p 5433 -U ${POSTGRES_USER:-telemetry} -d ${POSTGRES_DB:-telemetry}"]
+      test: ["CMD-SHELL", "pg_isready -p 5440 -U ${POSTGRES_USER:-telemetry} -d ${POSTGRES_DB:-telemetry}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,7 +60,7 @@ services:
   app:
     build: .
     environment:
-      COLLECTOR_DSN: postgres://${POSTGRES_USER:-telemetry}:${POSTGRES_PASSWORD}@db:5433/${POSTGRES_DB:-telemetry}
+      COLLECTOR_DSN: postgres://${POSTGRES_USER:-telemetry}:${POSTGRES_PASSWORD}@db:5440/${POSTGRES_DB:-telemetry}
       COLLECTOR_TZ: ${COLLECTOR_TZ:-Europe/Moscow}
       COLLECTOR_RETENTION_DAYS: ${COLLECTOR_RETENTION_DAYS:-90}
       COLLECTOR_SERVICES_FILE: /etc/telemetry/services.json

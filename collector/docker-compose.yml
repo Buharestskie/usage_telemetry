@@ -1,0 +1,83 @@
+# Управляется Ansible, роль telemetry_collector.
+name: telemetry
+
+services:
+  db:
+    image: postgres:18-alpine
+    # Соединение с Grafana идёт между серверами разных провайдеров по
+    # открытой сети, поэтому база включает TLS. Сертификат самоподписанный и
+    # создаётся ролью: удостоверяющего центра у нас нет, а от пассивного
+    # прослушивания пароля и данных это защищает. Клиент подключается с
+    # sslmode=require — шифрование обязательно, проверка имени не делается.
+    command:
+      - postgres
+      - -c
+      - ssl=on
+      - -c
+      - ssl_cert_file=/certs/server.crt
+      - -c
+      - ssl_key_file=/certs/server.key
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-telemetry}
+      POSTGRES_USER: ${POSTGRES_USER:-telemetry}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?нужен пароль базы}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./certs:/certs:ro
+    # Порт открыт наружу ради единственного потребителя — Grafana на сервере
+    # мониторинга. Кого пускать, решает правило ufw в роли telemetry_collector;
+    # обход ufw контейнерами на этом хосте закрыт отдельно.
+    ports:
+      - "${COLLECTOR_PG_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-telemetry} -d ${POSTGRES_DB:-telemetry}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+  app:
+    build: .
+    environment:
+      COLLECTOR_DSN: postgres://${POSTGRES_USER:-telemetry}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-telemetry}
+      COLLECTOR_TZ: ${COLLECTOR_TZ:-Europe/Moscow}
+      COLLECTOR_RETENTION_DAYS: ${COLLECTOR_RETENTION_DAYS:-90}
+      COLLECTOR_SERVICES_FILE: /etc/telemetry/services.json
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    volumes:
+      # Справочник имён приложений, разложенный Ansible из того же списка,
+      # по которому живёт статус-страница.
+      - /etc/telemetry/services.json:/etc/telemetry/services.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    # Порт публикуется на всех интерфейсах хоста, и это не оплошность:
+    # события шлют контейнеры других проектов, а с петлёй хоста они связаться
+    # не могут — приходят они через адрес шлюза докера. Снаружи порт при этом
+    # закрыт: на global обход ufw контейнерами запрещён, а правила
+    # маршрутизации для него нет и не будет. В nginx коллектор тоже не заводится.
+    ports:
+      - "${COLLECTOR_PORT:-8130}:8000"
+    # Своя проверка живости, чтобы коллектор попал под общие алерты о
+    # нездоровых контейнерах: отдельной внешней пробы у него нет и не нужно —
+    # его падение не касается никого, кроме нас.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).status==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+volumes:
+  pgdata:

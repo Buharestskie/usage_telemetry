@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Секреты и то, что создаётся на сервере при раскатке.
+.env
+collector/.env
+collector/certs/

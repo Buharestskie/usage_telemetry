@@ -11,6 +11,14 @@ services:
     # sslmode=require — шифрование обязательно, проверка имени не делается.
     command:
       - postgres
+      # Порт внутри контейнера совпадает с опубликованным намеренно. Правило
+      # ufw для контейнера проверяет порт ПОСЛЕ DNAT, то есть внутренний:
+      # при несовпадении (5433 снаружи, 5432 внутри) разрешение пришлось бы
+      # писать на 5432 — и оно открыло бы доступ к любой другой базе хоста,
+      # которую однажды опубликуют. Совпадение портов оставляет доступ
+      # ровно к этой.
+      - -c
+      - port=5433
       - -c
       - ssl=on
       - -c
@@ -31,9 +39,9 @@ services:
     # мониторинга. Кого пускать, решает правило ufw в роли telemetry_collector;
     # обход ufw контейнерами на этом хосте закрыт отдельно.
     ports:
-      - "${COLLECTOR_PG_PORT:-5433}:5432"
+      - "${COLLECTOR_PG_PORT:-5433}:5433"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-telemetry} -d ${POSTGRES_DB:-telemetry}"]
+      test: ["CMD-SHELL", "pg_isready -p 5433 -U ${POSTGRES_USER:-telemetry} -d ${POSTGRES_DB:-telemetry}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -47,7 +55,7 @@ services:
   app:
     build: .
     environment:
-      COLLECTOR_DSN: postgres://${POSTGRES_USER:-telemetry}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-telemetry}
+      COLLECTOR_DSN: postgres://${POSTGRES_USER:-telemetry}:${POSTGRES_PASSWORD}@db:5433/${POSTGRES_DB:-telemetry}
       COLLECTOR_TZ: ${COLLECTOR_TZ:-Europe/Moscow}
       COLLECTOR_RETENTION_DAYS: ${COLLECTOR_RETENTION_DAYS:-90}
       COLLECTOR_SERVICES_FILE: /etc/telemetry/services.json

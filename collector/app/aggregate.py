@@ -39,7 +39,7 @@ DO UPDATE SET hits = EXCLUDED.hits
 """
 
 PATHS_SQL = """
-INSERT INTO daily_paths (day, service, method, path, hits, users, errors, duration_p95)
+INSERT INTO daily_paths (day, service, method, path, hits, users, errors, duration_p95, visitors)
 SELECT (at AT TIME ZONE $1)::date AS day,
        service,
        method,
@@ -50,7 +50,8 @@ SELECT (at AT TIME ZONE $1)::date AS day,
        coalesce(
            percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms)::int,
            0
-       )
+       ),
+       count(DISTINCT fingerprint)::int
   FROM events
  WHERE at >= $2
  GROUP BY 1, 2, 3, 4
@@ -58,7 +59,8 @@ ON CONFLICT (day, service, method, path)
 DO UPDATE SET hits = EXCLUDED.hits,
               users = EXCLUDED.users,
               errors = EXCLUDED.errors,
-              duration_p95 = EXCLUDED.duration_p95
+              duration_p95 = EXCLUDED.duration_p95,
+              visitors = EXCLUDED.visitors
 """
 
 

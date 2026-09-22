@@ -64,6 +64,11 @@ class Event:
     session_id: str | None = None
     user_agent: str | None = None
 
+    client_ip: str | None = None
+    """Адрес клиента. Нужен там, где приложение не опознаёт человека само:
+    коллектор превращает его в отпечаток и сам адрес не сохраняет. Дальше
+    события с этим полем не уезжают."""
+
     def as_payload(self) -> dict[str, Any]:
         return {
             "at": round(self.at, 3),
@@ -77,6 +82,7 @@ class Event:
             "user_id": self.user_id,
             "session_id": self.session_id,
             "user_agent": self.user_agent,
+            "client_ip": self.client_ip,
         }
 
 

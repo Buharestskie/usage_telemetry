@@ -15,6 +15,7 @@ class Settings:
     aggregate_interval_seconds: int = 3600
     max_batch: int = 1000
     services_file: str = "/etc/telemetry/services.json"
+    fingerprint_salt: str = ""
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -29,4 +30,8 @@ class Settings:
             aggregate_interval_seconds=int(os.getenv("COLLECTOR_AGGREGATE_INTERVAL", "3600")),
             max_batch=int(os.getenv("COLLECTOR_MAX_BATCH", "1000")),
             services_file=os.getenv("COLLECTOR_SERVICES_FILE", "/etc/telemetry/services.json"),
+            # Соль обязательна: без неё отпечаток — это хеш от адреса, а всё
+            # пространство адресов перебирается за секунды, и «необратимость»
+            # оказалась бы выдумкой.
+            fingerprint_salt=(os.getenv("COLLECTOR_FINGERPRINT_SALT") or "").strip(),
         )

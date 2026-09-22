@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import logging
 from datetime import datetime, timezone as dt_timezone
 
@@ -31,8 +32,8 @@ settings = Settings.from_env()
 database = Database(settings.dsn)
 
 INSERT_SQL = """
-INSERT INTO events (at, service, source, method, path, status, duration_ms, auth, user_id, session_id, user_agent)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+INSERT INTO events (at, service, source, method, path, status, duration_ms, auth, user_id, session_id, user_agent, fingerprint)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 """
 
 
@@ -48,6 +49,7 @@ class EventIn(BaseModel):
     user_id: str | None = Field(default=None, max_length=128)
     session_id: str | None = Field(default=None, max_length=128)
     user_agent: str | None = Field(default=None, max_length=256)
+    client_ip: str | None = Field(default=None, max_length=45)
 
 
 class Batch(BaseModel):
@@ -80,6 +82,22 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Коллектор телеметрии", lifespan=lifespan)
 
 
+def fingerprint(event: EventIn) -> str | None:
+    """Отпечаток посетителя: хеш от соли, адреса и user-agent.
+
+    Считается здесь, а не в приложениях, по двум причинам. Соль тогда одна
+    на весь парк, и отпечаток одного человека сопоставим между сервисами.
+    И приложениям не нужно знать секрет — его негде было бы им раздать:
+    механизма доставки `.env` в проекты у нас нет.
+
+    Сам адрес после этого отбрасывается и в базу не попадает.
+    """
+    if not settings.fingerprint_salt or not event.client_ip:
+        return None
+    material = f"{settings.fingerprint_salt}|{event.client_ip}|{event.user_agent or ''}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()[:32]
+
+
 @app.post("/events")
 async def accept(batch: Batch) -> dict[str, int]:
     """Принять пачку событий.
@@ -104,6 +122,7 @@ async def accept(batch: Batch) -> dict[str, int]:
             event.user_id,
             event.session_id,
             event.user_agent,
+            fingerprint(event),
         )
         for event in batch.events
     ]

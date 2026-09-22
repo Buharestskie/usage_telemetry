@@ -20,7 +20,16 @@ CREATE TABLE IF NOT EXISTS events (
     -- Имени и почты здесь нет намеренно: это метрика приложений.
     user_id     text,
     session_id  text,
-    user_agent  text
+    user_agent  text,
+    -- Отпечаток посетителя: хеш от адреса, user-agent и общей соли. Нужен
+    -- там, где приложение не опознаёт человека само — у половины сервисов
+    -- своей авторизации нет вовсе. Сам адрес не хранится: обратно из
+    -- отпечатка его не достать, а считать уникальных он позволяет.
+    --
+    -- Точность средняя и это надо помнить при разборе: сотрудники из офиса
+    -- сидят за одним адресом, и различает их только user-agent — разные
+    -- браузеры и устройства разойдутся, одинаковые схлопнутся в одного.
+    fingerprint text
 );
 
 CREATE INDEX IF NOT EXISTS events_at_idx ON events (at);
@@ -51,6 +60,10 @@ CREATE TABLE IF NOT EXISTS daily_paths (
     users        integer NOT NULL,
     errors       integer NOT NULL,
     duration_p95 integer NOT NULL,
+    -- Разных посетителей по отпечатку. Держится отдельно от users: там
+    -- точный идентификатор из авторизации, здесь оценка. Смешивать их в
+    -- одной колонке нельзя — через месяц никто не вспомнит, где что.
+    visitors     integer NOT NULL DEFAULT 0,
     PRIMARY KEY (day, service, method, path)
 );
 
@@ -82,3 +95,7 @@ CREATE TABLE IF NOT EXISTS services (
     expected boolean NOT NULL DEFAULT true,
     seen_at  timestamptz
 );
+
+-- Догоняющие добавления для баз, созданных до появления отпечатка.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS fingerprint text;
+ALTER TABLE daily_paths ADD COLUMN IF NOT EXISTS visitors integer NOT NULL DEFAULT 0;

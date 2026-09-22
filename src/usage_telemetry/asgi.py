@@ -171,6 +171,7 @@ class UsageTelemetryMiddleware:
             user_id=_as_str(identity.get("user_id")),
             session_id=_as_str(identity.get("session_id")),
             user_agent=_header(scope, b"user-agent"),
+            client_ip=_client_ip(scope),
         )
         self.client.submit(event)
 
@@ -191,6 +192,30 @@ def _header(scope: dict[str, Any], name: bytes) -> str | None:
                 return raw_value.decode("latin-1")[:200]
             except Exception:  # noqa: BLE001
                 return None
+    return None
+
+
+def _client_ip(scope: dict[str, Any]) -> str | None:
+    """Адрес клиента с поправкой на обратный прокси.
+
+    Перед приложениями стоит nginx, поэтому адрес в соединении — его
+    собственный. Настоящий приходит в заголовках, которые он проставляет;
+    берём первый адрес цепочки, то есть исходного клиента.
+
+    Само значение до хранилища не доезжает: коллектор считает по нему
+    отпечаток и адрес отбрасывает.
+    """
+    forwarded = _header(scope, b"x-forwarded-for")
+    if forwarded:
+        first = forwarded.split(",", 1)[0].strip()
+        if first:
+            return first[:45]
+    real = _header(scope, b"x-real-ip")
+    if real:
+        return real.strip()[:45]
+    client = scope.get("client")
+    if isinstance(client, (tuple, list)) and client:
+        return str(client[0])[:45]
     return None
 
 

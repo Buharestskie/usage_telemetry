@@ -64,6 +64,10 @@ services:
       COLLECTOR_TZ: ${COLLECTOR_TZ:-Europe/Moscow}
       COLLECTOR_RETENTION_DAYS: ${COLLECTOR_RETENTION_DAYS:-90}
       COLLECTOR_SERVICES_FILE: /etc/telemetry/services.json
+      # Соль отпечатка посетителя. Создаётся ролью один раз и лежит
+      # на сервере: без неё отпечаток был бы просто хешем адреса,
+      # который перебирается за секунды.
+      COLLECTOR_FINGERPRINT_SALT: ${COLLECTOR_FINGERPRINT_SALT:?нужна соль отпечатка}
       SENTRY_DSN: ${SENTRY_DSN:-}
     volumes:
       # Справочник имён приложений, разложенный Ansible из того же списка,

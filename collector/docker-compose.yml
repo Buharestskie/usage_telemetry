@@ -22,7 +22,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-telemetry}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?нужен пароль базы}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # В образах postgres 18 монтируется сам каталог, а не data внутри него:
+      # данные тогда лежат в подкаталоге, и обновление версии через
+      # pg_upgrade --link не упирается в границу точки монтирования.
+      - pgdata:/var/lib/postgresql
       - ./certs:/certs:ro
     # Порт открыт наружу ради единственного потребителя — Grafana на сервере
     # мониторинга. Кого пускать, решает правило ufw в роли telemetry_collector;
